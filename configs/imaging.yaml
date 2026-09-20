@@ -1,0 +1,48 @@
+# Imaging sweep. Same geometry as classification.
+#   python scripts/run_imaging_sweep.py --dataset cifar100 --out_dir experiments/img/cifar100
+# The geometry is identical to the classification geometry, so both tasks satisfy the
+# sampling (d > lambda/2) and connectivity (R/w >= 1) criteria of Supplementary Secs. 3-4.
+task: imaging
+datasets: [mnist, fmnist, cifar100]
+encoding: amplitude
+wavelength_m: 532e-9
+grid: 200                 # simulation grid; aperture 107 lambda -> pixel pitch 0.535 lambda
+img: 128                  # image size (pixels) placed at the centre of the grid; SSIM/MSE also reported on this crop
+aperture_lam: 107.0
+z_lam: 40.0               # inter-layer spacing
+z_out_lam: 40.0           # last layer -> detector
+L: 5
+n_values: [1.1, 1.2, 1.3, 1.5, 1.7, 1.9]
+seeds: [0, 1, 2]
+data_split:
+  n_train: 1500
+  n_val: 200
+  n_test: 300
+  split_seed: 0            # same split for every method and seed
+epochs: 50
+ft_epochs: 10             # volumetric fine-tuning epochs from the thin-trained solution (per-epoch metrics are logged)
+batch: 4
+lr: 1.0e-3
+optimizer: adam
+loss: mse                 # between |U_out|^2 and A^2 on the full grid
+phase_param: sigmoid      # phi = 2 pi sigmoid(beta) (as in the submitted imaging experiments)
+discretisation:
+  # Two discretisation errors: the split-step propagation error (~ dz^2) and the height quantisation of the
+  # N_sub-level soft staircase of Eq. (11) (~ N_sub^-2).  Imaging SSIM is sensitive to both: a design trained
+  # with 15 slices over-fits the staircase (SSIM 0.55-0.56 at its own N_sub, 0.47-0.49 at N_sub = 18,
+  # 0.51-0.53 converged), designs trained with >= 30 slices are converged to within 0.005 SSIM, and the
+  # evaluation uses >= 120 slices (quantisation error <= 5e-4 field NMSE at every index; Table S3).
+  train_dz_lambda: 6
+  train_n_sub: "max(30, ceil(6 * h_max / lambda))"     # 60 at n = 1.1, 30 otherwise
+  eval_n_sub:  "max(120, ceil(12 * h_max / lambda))"   # 120 at every index in the sweep
+axial_convention:
+  volumetric_layers: centroid
+  also_reported: [entrance]
+calibration_controls:
+  axial_shift: "[-h_max, +h_max], single global delta_z; fitted on the 200 validation images"
+  height_scale: "[0.5, 1.5], single global s"
+geometry_check:           # values in wavelengths
+  pixel_pitch: 0.535
+  u_max_deg: 69.2         # asin(lambda / 2d)
+  R_over_w: 1.0           # z * tan(u_max) / (200 * d) = 40 * 2.63 / 107
+  h_max_over_z: {n=1.1: 0.25, n=1.2: 0.125, n=1.3: 0.083, n=1.5: 0.05, n=1.7: 0.036, n=1.9: 0.028}

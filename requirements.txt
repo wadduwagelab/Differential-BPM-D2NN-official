@@ -1,0 +1,9 @@
+# Tested with Python 3.11 on Linux (CUDA 12.4). CPU execution works but is slow.
+torch>=2.3          # 2.6.0+cu124 used for the reported results
+torchvision>=0.18   # 0.21.0 used
+numpy>=1.26         # 2.4.4 used
+scipy>=1.11         # 1.17.1 used (exact McNemar / Wilcoxon / bootstrap)
+matplotlib>=3.8     # 3.11.0 used
+# Full-wave validation only (optional; requires a Flexcompute account):
+#   pip install tidy3d>=2.8
+# tidy3d>=2.8         # 2.11.2 used

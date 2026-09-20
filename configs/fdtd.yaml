@@ -1,0 +1,40 @@
+# Full-wave (Tidy3D FDTD) validation. All scripts live in scripts/fdtd/.
+#
+# 1) designs used for FDTD (small aperture so that paired full-wave runs are affordable)
+#   python scripts/fdtd/train_fdtd_designs.py --task classification --n 1.5 --z_lam 8  --out_dir experiments/fdtd/designs_cls
+#   python scripts/fdtd/train_fdtd_designs.py --task classification --n 1.2 --z_lam 16 --n_sub 30 --out_dir experiments/fdtd/designs_cls_n1.2
+#   python scripts/fdtd/train_fdtd_designs.py --task classification --n 1.1 --z_lam 30 --n_sub 30 --out_dir experiments/fdtd/designs_cls_n1.1
+#   python scripts/fdtd/train_fdtd_designs.py --task imaging        --n 1.5 --z_lam 8  --out_dir experiments/fdtd/designs_img
+# 2) single-layer same-structure fidelity + mesh convergence (lambda/10, lambda/20, lambda/30)
+#   python scripts/fdtd/run_single_layer.py --export experiments/fdtd/designs_cls/fdtd_export.npz --out_dir experiments/fdtd/single_layer
+#   python scripts/fdtd/run_single_layer.py --export experiments/fdtd/designs_cls/fdtd_export.npz --n_eval 1.2 --meshes 10,20 --out_dir experiments/fdtd/single_layer_n1.2
+# 3) paired multilayer study (same samples through both designs)
+#   python scripts/fdtd/run_multilayer.py --export experiments/fdtd/designs_cls/fdtd_export.npz --out_dir experiments/fdtd/multilayer_cls_n1.5 --mesh 10
+#   python scripts/fdtd/run_multilayer.py --export experiments/fdtd/designs_cls/fdtd_export.npz --out_dir experiments/fdtd/multilayer_cls_n1.5 --mesh 20 --samples 0,1
+#   python scripts/fdtd/run_multilayer.py --export experiments/fdtd/designs_cls_n1.2/fdtd_export.npz --out_dir experiments/fdtd/multilayer_cls_n1.2 --mesh 10
+#   python scripts/fdtd/run_multilayer.py --export experiments/fdtd/designs_cls_n1.1/fdtd_export.npz --out_dir experiments/fdtd/multilayer_cls_n1.1 --mesh 10
+#   python scripts/fdtd/run_multilayer.py --export experiments/fdtd/designs_img/fdtd_export.npz     --out_dir experiments/fdtd/multilayer_img_n1.5 --mesh 10
+# 4) statistics (exact McNemar, paired bootstrap CI, Wilcoxon) and same-structure fidelity
+#   python scripts/fdtd/analyze_fdtd.py --run_dir experiments/fdtd/multilayer_cls_n1.5 --export experiments/fdtd/designs_cls/fdtd_export.npz --task classification
+#   python scripts/fdtd/compare_meshes.py experiments/fdtd/multilayer_cls_n1.5 experiments/fdtd/designs_cls/fdtd_export.npz   # lambda/10 vs lambda/20
+solver: Tidy3D (Flexcompute), version 2.11.2
+wavelength_um: 0.532
+design_grid: 32x32 trainable aperture, pixel pitch 0.535 lambda (0.2846 um)
+scalar_window: 128        # zero-padded window for thin/dBPM predictions (open boundaries, like the FDTD PML)
+layers: 5
+inter_layer_spacing_lam: {n=1.5: 8, n=1.2: 16, n=1.1: 30}   # h_max/z = 0.25, 0.31, 0.33; R/w = 1.2, 2.5, 4.6 for the 32x32 aperture (fully connected)
+material: lossless dielectric of index n in air; each pixel is a rectangular column of height h(x,y)
+source: custom field source; the scalar input field is converted to a Maxwell-consistent (Ey, Hx) plane-wave spectrum
+boundaries: PML on all sides
+mesh:
+  paired_study: 10 cells per wavelength in every medium (lambda/(10 n) inside the dielectric)
+  convergence: [10, 20, 30] cells per wavelength on the single-layer structures; 20 on two multilayer samples
+monitors: detector-plane field (Ex, Ey, Ez) area-averaged onto the 32x32 design grid; optional after-layer and YZ monitors
+detector_metrics:
+  classification: accuracy, correct-patch fraction p_y, margin ratio, efficiency, cross-entropy (patch energies)
+  imaging: Pearson r, scale-invariant rel. L2, NRMSE, SSIM (after one global intensity scale)
+fidelity_metrics: complex-field NMSE with one global complex scale, intensity NMSE, Pearson, SSIM (model prediction vs FDTD)
+samples:
+  classification: 20 test images, stratified 2 per class, drawn with selection seed 2026 before any simulation (same indices at every n)
+  imaging: 20 random test images (selection seed 2026)
+statistics: exact McNemar (discordant pairs), paired bootstrap 95% CI (20,000 resamples), Wilcoxon signed-rank, paired t
